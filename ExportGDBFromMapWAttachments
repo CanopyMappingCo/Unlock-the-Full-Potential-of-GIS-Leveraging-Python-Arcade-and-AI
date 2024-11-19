@@ -1,0 +1,48 @@
+import arcpy
+import os
+import re
+
+# Adjust to the desired output GDB below
+arcpy.env.workspace = r"C:\Mac\Home\Documents\ArcGIS\Projects\ExportGDB_Example\ExportGDB_Example.gdb"
+
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+mapx = aprx.listMaps()[0]
+
+def clean_name(name):
+    # Clean layer name to be safe for a feature class name
+    cleaned = re.sub('[^A-Za-z0-9_]+', '_', name)
+    if cleaned and cleaned[0].isdigit():
+        cleaned = 'Layer' + cleaned
+    return cleaned
+
+def unique_name(base_name, workspace):
+    # Generate a unique name by adding a suffix if the name already exists
+    counter = 1
+    new_name = base_name
+    while arcpy.Exists(os.path.join(workspace, new_name)):
+        new_name = f"{base_name}_{counter}"
+        counter += 1
+    return new_name
+
+# Iterate over each layer in the map
+for layer in mapx.listLayers():
+    if not layer.isGroupLayer:
+        if layer.isFeatureLayer and layer.supports("DATASOURCE"):
+            if layer.isBasemapLayer:
+                # Skip basemap layers
+                print(f"Basemap layer '{layer.name}' detected - no export performed.")
+            else:
+                # Prepare a cleaned and unique name for the output feature class
+                clean_layer_name = clean_name(layer.name)
+                unique_layer_name = unique_name(clean_layer_name, arcpy.env.workspace)
+                out_feature_class = os.path.join(arcpy.env.workspace, unique_layer_name)
+
+                # Export the feature layer while preserving attachments
+                arcpy.CopyFeatures_management(layer, out_feature_class)
+                print(f"Exported '{layer.name}' as '{unique_layer_name}' to {out_feature_class}")
+        else:
+            # Skip layers that cannot be exported
+            print(f"Layer '{layer.name}' is not a feature layer or does not support exporting - no export performed.")
+    else:
+        # Skip group layers
+        print(f"Group layer '{layer.name}' detected - no export performed.")
