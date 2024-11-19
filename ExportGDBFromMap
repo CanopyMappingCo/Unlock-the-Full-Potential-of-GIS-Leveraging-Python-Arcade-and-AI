@@ -1,0 +1,39 @@
+import arcpy
+import os
+import re
+
+#adjust to the desired output GDB below
+arcpy.env.workspace = r"C:\Mac\Home\Documents\ArcGIS\Projects\ExportGDB_Example\ExportGDB_Example.gdb"
+
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+mapx = aprx.listMaps()[0]
+
+def clean_name(name):
+    cleaned = re.sub('[^A-Za-z0-9_]+', '_', name)
+    if cleaned and cleaned[0].isdigit():
+        cleaned = 'Layer' + cleaned
+    return cleaned
+
+def unique_name(base_name, workspace):
+    counter = 1
+    new_name = base_name
+    while arcpy.Exists(os.path.join(workspace, new_name)):
+        new_name = f"{base_name}_{counter}"
+        counter += 1
+    return new_name
+
+for layer in mapx.listLayers():
+    if not layer.isGroupLayer:
+        if layer.isFeatureLayer and layer.supports("DATASOURCE"):
+            if layer.isBasemapLayer:
+                print(f"Basemap layer '{layer.name}' detected - no export performed.")
+            else:
+                clean_layer_name = clean_name(layer.name)
+                unique_layer_name = unique_name(clean_layer_name, arcpy.env.workspace)
+                out_feature_class = os.path.join(arcpy.env.workspace, unique_layer_name)
+                arcpy.FeatureClassToFeatureClass_conversion(layer, arcpy.env.workspace, unique_layer_name)
+                print(f"Exported '{layer.name}' as '{unique_layer_name}' to {out_feature_class}")
+        else:
+            print(f"Layer '{layer.name}' is not a feature layer or does not support exporting - no export performed.")
+    else:
+        print(f"Group layer '{layer.name}' detected - no export performed.")
